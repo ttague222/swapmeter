@@ -1,4 +1,4 @@
-# Understudy: Design Document
+# Swapmeter: Design Document
 
 **Date:** 2026-08-03
 **Status:** Approved, ready for implementation planning
@@ -8,11 +8,11 @@
 
 ## 1. Summary
 
-Understudy is an open source CLI that answers one question: **can a cheaper model replace the one I am running in production without breaking anything?**
+Swapmeter is an open source CLI that answers one question: **can a cheaper model replace the one I am running in production without breaking anything?**
 
 You point it at a prompt you already ship. It runs that prompt across your current model and a set of candidate models, compares the outputs, and reports agreement rate, cost, latency, and structured-output failure rate for each candidate. It then shows you exactly which rows the cheap models got wrong, and lets you judge those rows so the next run is scored against your judgment rather than a guess.
 
-The metaphor runs through the product. The model you ship today is the **lead**. Candidate models are **understudies**. The disagreement review step is the **audition**.
+Terminology is deliberately plain. The model you ship today is the **baseline**. The models you are considering are **candidates**. The step where you adjudicate differences is **review**.
 
 ---
 
@@ -32,17 +32,17 @@ The metaphor runs through the product. The model you ship today is the **lead**.
 - Agents, tool use, or multi-turn conversations.
 - Fine-tuning, distillation, or model training of any kind.
 - A hosted service, dashboard, or team collaboration features.
-- Broad academic benchmark coverage. Understudy evaluates *your* task, not MMLU.
+- Broad academic benchmark coverage. Swapmeter evaluates *your* task, not MMLU.
 
 ---
 
 ## 3. Positioning
 
-The LLM evaluation space is crowded: lm-evaluation-harness, promptfoo, DeepEval, Ragas, Inspect AI, Braintrust, LangSmith. Understudy is differentiated on two axes.
+The LLM evaluation space is crowded: lm-evaluation-harness, promptfoo, DeepEval, Ragas, Inspect AI, Braintrust, LangSmith. Swapmeter is differentiated on two axes.
 
-**Cold start.** Every comparable tool begins by asking for a dataset the user does not have. Understudy generates a synthetic input set from the prompt itself, so the first run needs nothing but a config file. Reducing time-to-first-result is the primary adoption lever.
+**Cold start.** Every comparable tool begins by asking for a dataset the user does not have. Swapmeter generates a synthetic input set from the prompt itself, so the first run needs nothing but a config file. Reducing time-to-first-result is the primary adoption lever.
 
-**The audition loop.** Because the baseline is the incumbent model's own output, the raw metric is *agreement*, not *correctness*. Rather than hiding this, Understudy surfaces the disagreements and lets the user adjudicate them. Reviewing a dozen disagreements takes about five minutes and produces a small labeled golden set the user never had to sit down and build. No other tool in this category converts its own weakness into the on-ramp for real data.
+**The review loop.** Because the baseline is the incumbent model's own output, the raw metric is *agreement*, not *correctness*. Rather than hiding this, Swapmeter surfaces the disagreements and lets the user adjudicate them. Reviewing a dozen disagreements takes about five minutes and produces a small labeled golden set the user never had to sit down and build. No other tool in this category converts its own weakness into the on-ramp for real data.
 
 Local-first operation is a secondary differentiator against the SaaS options. Data never leaves the machine except to reach the model providers the user is already calling.
 
@@ -50,15 +50,15 @@ Local-first operation is a secondary differentiator against the SaaS options. Da
 
 ## 4. User journey
 
-1. **Init.** `understudy init` scaffolds a config file. `understudy init --example` scaffolds a complete working config for a realistic task, runnable immediately with no edits.
+1. **Init.** `swapmeter init` scaffolds a config file. `swapmeter init --example` scaffolds a complete working config for a realistic task, runnable immediately with no edits.
 
-2. **First run, no data.** `understudy run` generates a synthetic input set, runs the lead model to establish the baseline, then runs each understudy. A terminal table shows agreement rate, cost per 1,000 calls, p50 latency, and invalid output rate per model. `run` also writes the HTML report and prints its path, so a first-time user reaches the visual output without knowing a second command exists.
+2. **First run, no data.** `swapmeter run` generates a synthetic input set, runs the baseline model, then runs each candidate. A terminal table shows agreement rate, cost per 1,000 calls, p50 latency, and invalid output rate per model. `run` also writes the HTML report and prints its path, so a first-time user reaches the visual output without knowing a second command exists.
 
-3. **Inspect.** The HTML report contains headline numbers and a side-by-side list of every disagreement. `understudy report` re-renders it from cached results without re-running anything, which is what you use after editing judgments or when you want a fresh shareable copy.
+3. **Inspect.** The HTML report contains headline numbers and a side-by-side list of every disagreement. `swapmeter report` re-renders it from cached results without re-running anything, which is what you use after editing judgments or when you want a fresh shareable copy.
 
-4. **Audition.** `understudy review` starts a local web UI that walks through disagreements one at a time. For each, the user marks: lead was right, understudy was right, or both acceptable. Judgments are written to a judgments file beside the config.
+4. **Review.** `swapmeter review` starts a local web UI that walks through disagreements one at a time. For each, the user marks: baseline was right, candidate was right, or both acceptable. Judgments are written to a judgments file beside the config.
 
-5. **Re-run.** `understudy run` scores against saved judgments where they exist, falling back to the baseline output elsewhere. Cached responses mean this costs nothing. Previously judged rows stay judged.
+5. **Re-run.** `swapmeter run` scores against saved judgments where they exist, falling back to the baseline output elsewhere. Cached responses mean this costs nothing. Previously judged rows stay judged.
 
 6. **Graduate to real data.** Changing `data.source` from `synthetic` to `file` and supplying a CSV or JSONL path swaps in real traffic. Nothing else in the config changes.
 
@@ -174,9 +174,9 @@ Produces input rows. Two implementations behind one interface:
 
 ### `cache`
 
-Content-addressed store keyed by model identifier, prompt hash, and input hash. Backed by SQLite in a local `.understudy/` directory.
+Content-addressed store keyed by model identifier, prompt hash, and input hash. Backed by SQLite in a local `.swapmeter/` directory.
 
-This module is load-bearing rather than an optimization. The audition loop depends on re-running being free. If step 5 of the user journey re-bills the user, the journey collapses. It also makes tests deterministic and demos instant.
+This module is load-bearing rather than an optimization. The review loop depends on re-running being free. If step 5 of the user journey re-bills the user, the journey collapses. It also makes tests deterministic and demos instant.
 
 **Depends on:** nothing internal.
 
@@ -235,17 +235,17 @@ config -> inputs -> runner (baseline + candidates, through cache)
 
 Understanding what the number means is central to the product's credibility.
 
-**Default reference.** For a given input row, the reference output is the lead model's output for that row.
+**Default reference.** For a given input row, the reference output is the baseline model's output for that row.
 
 **Judgment override.** A judgment is stored per input row, not per candidate. It records the set of outputs the user has accepted as correct for that row, plus the set explicitly rejected. The review UI presents each disagreement as a choice, and that choice updates those sets:
 
-- *Lead was right*: the lead's output joins the accepted set, the candidate's output joins the rejected set.
-- *Understudy was right*: the candidate's output joins the accepted set, the lead's output joins the rejected set.
+- *Baseline was right*: the baseline's output joins the accepted set, the candidate's output joins the rejected set.
+- *Candidate was right*: the candidate's output joins the accepted set, the baseline's output joins the rejected set.
 - *Both acceptable*: both outputs join the accepted set.
 
-Once a row has any judgment, scoring for that row uses the accepted set for **every** model, including the lead. Any model producing an output in the accepted set is a match. Any model producing an output in the rejected set is a mismatch. An output in neither set is unjudged and surfaces as a new disagreement for review.
+Once a row has any judgment, scoring for that row uses the accepted set for **every** model, including the baseline. Any model producing an output in the accepted set is a match. Any model producing an output in the rejected set is a mismatch. An output in neither set is unjudged and surfaces as a new disagreement for review.
 
-Keying judgments to the row rather than to a candidate means the work of judging is reused across every model, and across future runs that add new candidates. It also lets the report show the lead's own accuracy, which is often the most surprising number in the run.
+Keying judgments to the row rather than to a candidate means the work of judging is reused across every model, and across future runs that add new candidates. It also lets the report show the baseline model's own accuracy, which is often the most surprising number in the run.
 
 **Naming discipline.** The metric is called **agreement**, never accuracy, anywhere in the UI, the report, or the docs, until judgments exist for the rows in question. Once a run's rows are fully judged, the report may present it as accuracy against the user's own labels. Blurring this line is the fastest way to lose technical credibility.
 
@@ -286,7 +286,7 @@ The bar: **the full default suite runs offline, in seconds, with no API keys.** 
 | Concern | Choice | Reasoning |
 |---|---|---|
 | Language | Python 3.11+ | Target users' LLM pipelines are overwhelmingly Python. The eval ecosystem and its contributors live here. |
-| Distribution | `uvx understudy` / `pip install understudy` | Near-zero friction first run. |
+| Distribution | `uvx swapmeter` / `pip install swapmeter` | Near-zero friction first run. |
 | Provider layer | LiteLLM, wrapped | Breadth across 100+ providers plus maintained pricing metadata, which is tedious and error-prone to maintain by hand. Wrapped so it is replaceable. |
 | CLI | Typer | Standard, good help output, minimal boilerplate. |
 | Config validation | Pydantic | Typed models with useful validation errors. |
@@ -295,7 +295,7 @@ The bar: **the full default suite runs offline, in seconds, with no API keys.** 
 | Cache | SQLite | Stdlib, single file, no service to run. |
 | Review UI | Stdlib HTTP server plus vanilla JS | Avoids a frontend build step. The repo stays pip-installable with no Node toolchain. |
 
-**A single implementation, deliberately.** There will be no parallel TypeScript port. Two implementations means two test suites, two release processes, inevitable drift, and split attention from a solo maintainer. Because the interface is a config file plus a CLI, a TypeScript shop uses Understudy without writing Python. If demand for a native Node client appears later, a thin wrapper over the same config format is a small amount of work.
+**A single implementation, deliberately.** There will be no parallel TypeScript port. Two implementations means two test suites, two release processes, inevitable drift, and split attention from a solo maintainer. Because the interface is a config file plus a CLI, a TypeScript shop uses Swapmeter without writing Python. If demand for a native Node client appears later, a thin wrapper over the same config format is a small amount of work.
 
 **Known risk:** LiteLLM is a large dependency with active release churn, and its structured-output handling is not uniform across providers. Edge cases are expected. The `Provider` wrapper is what makes them survivable and contained.
 
@@ -303,16 +303,18 @@ The bar: **the full default suite runs offline, in seconds, with no API keys.** 
 
 ## 11. Repository and launch
 
-- **Name:** `understudy`. Availability on PyPI and GitHub must be confirmed before implementation begins. Fallbacks, in order: `downshift`, `standin`.
+- **Name:** `swapmeter`. Verified on 2026-08-03: no PyPI package by that name, and zero GitHub repositories matching it. The namespace is empty on both.
 - **License:** Apache 2.0. The patent grant removes a common enterprise legal objection at no cost.
 - **Visibility:** public, under `ttague222`.
+
+An earlier working name, `understudy`, was rejected because PyPI `understudy` is an active package for trace-based evaluation of agentic systems, which is close enough to this project's space to cause real confusion. `downshift` and `standin` were rejected for heavy collisions with a popular React library and a .NET security toolkit respectively.
 
 **README structure**, in order:
 
 1. One sentence stating the question the tool answers.
 2. A terminal screenshot showing a real cost saving. The table, not a logo.
 3. A three-line quickstart that runs with no dataset.
-4. The honest caveat about agreement versus correctness, stated plainly, followed by how the audition loop resolves it.
+4. The honest caveat about agreement versus correctness, stated plainly, followed by how the review loop resolves it.
 5. Roadmap, naming open-ended text evaluation as the next release.
 
 **`init --example` is the highest-leverage adoption feature in the project.** A curious visitor gets a complete run in under a minute without writing anything.
